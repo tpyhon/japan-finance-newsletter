@@ -1,0 +1,58 @@
+{
+  "collected_at": "2026-05-03T22:24:48.895418",
+  "week_label": "2026-W18",
+  "equities": {
+    "nikkei": {
+      "latest": 59513.12,
+      "weekly_change": -203.06,
+      "weekly_change_pct": -0.34
+    },
+    "topix": {
+      "latest": 394.6,
+      "weekly_change": 0.9,
+      "weekly_change_pct": 0.23
+    },
+    "usdjpy": {
+      "latest": 157.03,
+      "weekly_change": -2.54,
+      "weekly_change_pct": -1.59
+    },
+    "eurjpy": {
+      "latest": 184.06,
+      "weekly_change": -2.74,
+      "weekly_change_pct": -1.47
+    },
+    "ej_etf": {
+      "latest": 88.3,
+      "weekly_change": 0.62,
+      "weekly_change_pct": 0.71
+    }
+  },
+  "boj": {
+    "policy_rate_pct": 0.5,
+    "description": "BOJ policy rate (manually updated Mar 2024)",
+    "note": "API unavailable - using last known value"
+  },
+  "news": [
+    {
+      "title": "Takaichi reaffirms push to revise Constitution for modern times",
+      "summary": "Japanese Prime Minister Sanae Takaichi on Sunday once again signaled her intention to pursue a revision of the Constitution, as she stressed that the postwar supreme law, which…",
+      "source": "Japan Today"
+    },
+    {
+      "title": "13 injured in head-on crash in western Japan",
+      "summary": "More than a dozen people, including 10 junior high school students, were injured following a head-on crash between a van and minivan Saturday night in Hikone, Shiga Prefecture,…",
+      "source": "Japan Today"
+    },
+    {
+      "title": "Woman arrested over death of 8-year-old daughter, says she was ‘exhausted' from raising her child",
+      "summary": "Police in Tokyo have arrested a 45-year-old woman on suspicion of killing her 8-year-old daughter.\nPolice said the woman, whose occupation is unknown, is accused of strangling her…",
+      "source": "Japan Today"
+    },
+    {
+      "title": "Japan foreign minister urges Iran to show flexibility in standoff with U.S.",
+      "summary": "Japan's foreign minister urged Iran to show &quot;flexibility&quot; during phone talks with his counterpart on Saturday, his ministry said, with the standoff between the United States and Iran…",
+      "source": "Japan Today"
+    }
+  ]
+}
