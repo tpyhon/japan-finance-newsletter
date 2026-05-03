@@ -32,9 +32,6 @@ jobs:
         run: python src/generate_newsletter.py
 
       - name: Prepare beehiiv HTML
-        env:
-          BEEHIIV_API_KEY: ${{ secrets.BEEHIIV_API_KEY }}
-          BEEHIIV_PUB_ID: ${{ secrets.BEEHIIV_PUB_ID }}
         run: python src/post_to_beehiiv.py
 
       - name: Generate X post text
