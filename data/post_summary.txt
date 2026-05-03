@@ -1,0 +1,31 @@
+
+============================================================
+ JAPAN FINANCE WEEKLY — 投稿用サマリー
+ 生成日時: 2026-05-03T22:31:34.761230
+ 対象週  : 2026-W18
+============================================================
+
+【Subject Line（件名）】
+Yen Strength Resurfaces: USD/JPY Slides 1.59%
+
+【Preview Text（プレビュー文）】
+Nikkei dips as the Yen finds footing; a look at the growing divergence in Japanese equities.
+
+【beehiivへの投稿手順】
+1. https://app.beehiiv.com/posts/new を開く
+2. Subject に上記「Subject Line」を貼り付ける
+3. Preview に上記「Preview Text」を貼り付ける
+4. Post Builderで「HTML」ブロックを追加
+5. data/post_ready.html の中身を貼り付ける
+6. 「Send」または「Schedule」をクリック
+
+【本文プレビュー（先頭300文字）】
+**SUBJECT LINE** Yen Strength Resurfaces: USD/JPY Slides 1.59%
+
+**PREVIEW TEXT** Nikkei dips as the Yen finds footing; a look at the growing divergence in Japanese equities.
+
+## The Yen's Sudden Snap-Back: USD/JPY Slides 1.59%
+
+### Executive Summary
+The Japanese Yen staged a notable recovery this we...
+============================================================
