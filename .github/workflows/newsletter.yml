@@ -5,7 +5,6 @@ on:
     # 毎週日曜日 23:00 JST (14:00 UTC)
     - cron: '0 14 * * 0'
   workflow_dispatch:
-    # 手動実行ボタンも有効化
 
 jobs:
   publish:
@@ -23,10 +22,18 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # ── データ収集 ──────────────────────────────
       - name: Collect market data
         run: python src/collect_data.py
 
-      - name: Generate newsletter
+      - name: Collect overseas intel
+        env:
+          ALPHA_VANTAGE_KEY: ${{ secrets.ALPHA_VANTAGE_KEY }}
+          FINNHUB_KEY: ${{ secrets.FINNHUB_KEY }}
+        run: python src/collect_overseas_intel.py
+
+      # ── 英語版ニュースレター生成 ─────────────────
+      - name: Generate English newsletter
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python src/generate_newsletter.py
@@ -37,14 +44,24 @@ jobs:
       - name: Generate X post text
         run: python src/post_to_x.py
 
+      # ── 日本語版note記事生成 ─────────────────────
+      - name: Generate Japanese note article
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python src/generate_note_jp.py
+
+      # ── 成果物をArtifactsに保存 ──────────────────
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: newsletter-output
+          name: newsletter-output-${{ github.run_number }}
           path: |
             data/weekly_data.json
+            data/overseas_intel.json
             data/newsletter_draft.json
+            data/note_draft.json
             data/post_ready.html
             data/post_summary.txt
             data/x_post.txt
+            data/note_post.txt
           retention-days: 7
