@@ -12,102 +12,132 @@ from google.genai import types
 
 load_dotenv()
 
-# 使用モデル：Gemma4（gemma-3-27b-it は Gemma3。Gemma4は下記）
-MODEL_ID = "gemma-4-26b-a4b-it"  # ← 後で確認して変更
-
+MODEL_ID = "gemma-4-26b-a4b-it"
 
 SYSTEM_PROMPT = """You are a senior financial analyst and writer specializing in Japanese markets.
-You live in Japan and write a weekly newsletter for English-speaking investors worldwide.
+You live in Tokyo and publish a weekly newsletter called "Japan Finance Weekly" \
+for English-speaking investors worldwide.
 
-Your writing style:
-- Professional yet conversational, like a Bloomberg brief written by a human living in Tokyo
-- Data-driven: always cite specific numbers
-- Culturally insightful: include observations only someone living in Japan would notice
-- Honest about uncertainty: never hype or guarantee returns
+YOUR WRITING STYLE:
+- Professional yet conversational — like a Bloomberg brief written by a sharp human analyst in Tokyo
+- Data-driven: always cite specific numbers with context
+- Forward-looking: always tell readers what the data MEANS and what to WATCH next
+- Culturally grounded: include one real, specific observation about Japan's business environment
+- Never hype, never guarantee returns, never make explicit buy/sell recommendations
 
-You must always end every newsletter with this exact disclaimer:
+NEWSLETTER STRUCTURE (follow exactly, in this order):
+
+**SUBJECT LINE** (max 60 chars, compelling, data-driven — on its own line)
+**PREVIEW TEXT** (max 100 chars, teaser — on its own line)
+
+## [Punchy headline referencing this week's biggest market move]
+
+### Executive Summary
+3 sentences max. What happened, why it matters, what to watch.
+
+## 📊 This Week's Scorecard
+A markdown table with columns: Asset | Price | Weekly Change.
+Include all assets provided in the data.
+
+## 💴 Yen & Rate Watch
+2-3 paragraphs. Analyze USD/JPY, EUR/JPY, GBP/JPY moves.
+Connect to: carry trade dynamics, import costs, exporter earnings, BOJ policy.
+
+## 📈 Equity Pulse
+2-3 paragraphs. Nikkei vs TOPIX divergence.
+EWJ ETF as proxy for foreign investor sentiment.
+
+## 🛢️ Energy & Global Context
+1-2 paragraphs. WTI and Brent impact on Japan as an energy importer.
+Reference Shanghai and KOSPI for Asian context.
+
+## 📰 3 Stories You Can't Miss
+Exactly 3 items from the news headlines provided.
+Format: **Headline** — one sentence on why it matters to investors.
+
+## 🎯 What To Watch Next Week
+Bullet list of 3-5 specific events or price levels to monitor.
+Be specific (e.g. "BOJ Summary of Opinions — Wednesday JST").
+
 ---
-*This newsletter is AI-assisted. All market data sourced from public APIs (Yahoo Finance, BOJ).
-This is not financial advice. Past performance does not guarantee future results.
-Always consult a qualified financial advisor before making investment decisions.*
----"""
+Data sources: Yahoo Finance, Bank of Japan, e-Stat. Market data as of Friday close JST.
+Financial decisions should be made in consultation with a qualified advisor."""
+
+
+def _fmt(val, decimals=2):
+    if isinstance(val, (int, float)):
+        return f"{val:,.{decimals}f}"
+    return "N/A"
+
+
+def _chg(val):
+    if isinstance(val, (int, float)):
+        return f"{val:+.2f}%"
+    return "N/A"
 
 
 def build_prompt(data: dict) -> str:
-    """weekly_data.jsonの内容からプロンプトを生成"""
+    eq   = data.get("equities", {})
+    boj  = data.get("boj", {})
+    news = data.get("news", [])
+    week = data.get("week_label", "")
 
-    nikkei  = data["equities"].get("nikkei", {})
-    topix   = data["equities"].get("topix", {})
-    usdjpy  = data["equities"].get("usdjpy", {})
-    eurjpy  = data["equities"].get("eurjpy", {})
-    ej_etf  = data["equities"].get("ej_etf", {})
-    boj     = data["boj"]
-    news    = data["news"]
-    week    = data["week_label"]
+    def e(key):
+        return eq.get(key, {})
 
     news_block = "\n".join([
-        f'- [{item["source"]}] {item["title"]}: {item["summary"][:150]}'
+        f'- [{item.get("source", "")}] {item.get("title", "")}: '
+        f'{str(item.get("summary", ""))[:150]}'
         for item in news
     ])
 
     prompt = f"""
 ## Weekly Market Data — {week}
 
-### Equity & FX
-- Nikkei 225 : {nikkei.get('latest', 'N/A'):,} ({nikkei.get('weekly_change_pct', 'N/A'):+}% WoW)
-- TOPIX ETF  : {topix.get('latest', 'N/A')} ({topix.get('weekly_change_pct', 'N/A'):+}% WoW)
-- USD/JPY    : {usdjpy.get('latest', 'N/A')} ({usdjpy.get('weekly_change_pct', 'N/A'):+}% WoW)
-- EUR/JPY    : {eurjpy.get('latest', 'N/A')} ({eurjpy.get('weekly_change_pct', 'N/A'):+}% WoW)
-- EWJ ETF    : {ej_etf.get('latest', 'N/A')} ({ej_etf.get('weekly_change_pct', 'N/A'):+}% WoW)
-- BOJ Rate   : {boj.get('policy_rate_pct', 'N/A')}%
+### Japanese Equities
+| Asset      | Price                                   | Weekly Change                              |
+|------------|-----------------------------------------|--------------------------------------------|
+| Nikkei 225 | {_fmt(e("nikkei").get("latest"))}       | {_chg(e("nikkei").get("weekly_change_pct"))}     |
+| TOPIX ETF  | {_fmt(e("topix").get("latest"))}        | {_chg(e("topix").get("weekly_change_pct"))}      |
+| EWJ ETF    | {_fmt(e("ej_etf").get("latest"))}       | {_chg(e("ej_etf").get("weekly_change_pct"))}     |
+
+### Foreign Exchange
+| Pair    | Rate                                    | Weekly Change                              |
+|---------|-----------------------------------------|--------------------------------------------|
+| USD/JPY | {_fmt(e("usdjpy").get("latest"))}       | {_chg(e("usdjpy").get("weekly_change_pct"))}     |
+| EUR/JPY | {_fmt(e("eurjpy").get("latest"))}       | {_chg(e("eurjpy").get("weekly_change_pct"))}     |
+| GBP/JPY | {_fmt(e("gbpjpy").get("latest"))}       | {_chg(e("gbpjpy").get("weekly_change_pct"))}     |
+
+### Commodities
+| Asset       | Price (USD)                             | Weekly Change                              |
+|-------------|-----------------------------------------|--------------------------------------------|
+| WTI Crude   | {_fmt(e("crude_wti").get("latest"))}    | {_chg(e("crude_wti").get("weekly_change_pct"))}  |
+| Brent Crude | {_fmt(e("crude_brent").get("latest"))}  | {_chg(e("crude_brent").get("weekly_change_pct"))}|
+| Gold        | {_fmt(e("gold").get("latest"))}         | {_chg(e("gold").get("weekly_change_pct"))}       |
+
+### Asian Markets
+| Index    | Level                                   | Weekly Change                              |
+|----------|-----------------------------------------|--------------------------------------------|
+| Shanghai | {_fmt(e("shanghai").get("latest"))}     | {_chg(e("shanghai").get("weekly_change_pct"))}   |
+| KOSPI    | {_fmt(e("kospi").get("latest"))}        | {_chg(e("kospi").get("weekly_change_pct"))}      |
+
+### BOJ Policy Rate
+Current rate: {boj.get("policy_rate_pct", "N/A")}%
 
 ### News Headlines This Week
 {news_block}
 
 ---
-
-Please write a complete weekly newsletter issue with the following structure:
-
-**SUBJECT LINE** (max 60 chars, compelling, data-driven)
-
-**PREVIEW TEXT** (max 100 chars, teaser for email preview)
-
-**BODY:**
-
-## [Punchy headline referencing this week's biggest market move]
-
-### Executive Summary
-(3 sentences max. What happened, why it matters, what to watch next week.)
-
-### 1. Yen Watch 💴
-(150-200 words. Analyze USD/JPY and EUR/JPY moves this week.
-What's driving yen weakness/strength? BOJ policy implications.
-What should international investors watching Japan think about this?)
-
-### 2. Equity Pulse 📈
-(150-200 words. Nikkei vs TOPIX divergence if any.
-EWJ ETF as a proxy for foreign investor sentiment.
-Sector or thematic observations.)
-
-### 3. Japan Insight 🗾
-(100-150 words. ONE cultural or on-the-ground observation from Japan
-that connects to this week's financial data.
-This must feel like it was written by someone actually living in Tokyo —
-something you'd only notice if you were here.)
-
-### What to Watch Next Week
-(3 bullet points. Upcoming events, data releases, or risks.)
-
-[ADD THE DISCLAIMER AT THE END]
+Please write the complete newsletter following the structure in your instructions exactly.
+Start with **SUBJECT LINE** on the very first line.
+Do NOT include a **BODY:** label.
+The newsletter body starts immediately after **PREVIEW TEXT**.
 """
     return prompt
 
 
 def generate_newsletter(data: dict) -> dict:
-    """Gemma4でニュースレターを生成してdictで返す"""
-
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-
     prompt = build_prompt(data)
 
     print(f"🤖 Generating newsletter with {MODEL_ID}...")
@@ -118,36 +148,64 @@ def generate_newsletter(data: dict) -> dict:
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
             temperature=0.7,
-            max_output_tokens=2048,
+            max_output_tokens=3000,
         ),
     )
 
     full_text = response.text
+    lines     = full_text.split("\n")
 
-    # SUBJECT LINE と PREVIEW TEXT を本文から切り出す
-    subject     = ""
-    preview     = ""
-    body_lines  = []
-    in_body     = False
+    # ── SUBJECT / PREVIEW をパース ──────────────────────────────
+    subject = ""
+    preview = ""
 
-    for line in full_text.split("\n"):
-        stripped = line.strip()
-        if stripped.startswith("**SUBJECT LINE**"):
-            subject = stripped.replace("**SUBJECT LINE**", "").strip(" :()*")
-        elif stripped.startswith("**PREVIEW TEXT**"):
-            preview = stripped.replace("**PREVIEW TEXT**", "").strip(" :()*")
-        elif stripped.startswith("**BODY:**"):
-            in_body = True
-        elif in_body:
-            body_lines.append(line)
+    for line in lines:
+        s = line.strip()
+        u = s.upper()
+        if not subject and "SUBJECT LINE" in u:
+            for token in ["**SUBJECT LINE**", "**Subject Line**",
+                          "SUBJECT LINE:", "Subject Line:",
+                          "**SUBJECT LINE:**", "**Subject Line:**"]:
+                s = s.replace(token, "")
+            subject = s.strip(" :()*\"'")
+        elif not preview and "PREVIEW TEXT" in u:
+            for token in ["**PREVIEW TEXT**", "**Preview Text**",
+                          "PREVIEW TEXT:", "Preview Text:",
+                          "**PREVIEW TEXT:**", "**Preview Text:**"]:
+                s = s.replace(token, "")
+            preview = s.strip(" :()*\"'")
+        if subject and preview:
+            break
 
-    # パースできなかった場合は全文をbodyにする
+    # ── BODY = 最初の ## 見出し行から末尾まで ────────────────────
+    body_start = None
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if (s.startswith("## ")
+                and "SUBJECT" not in s.upper()
+                and "PREVIEW" not in s.upper()
+                and "BODY"    not in s.upper()):
+            body_start = i
+            break
+
+    if body_start is not None:
+        body = "\n".join(lines[body_start:]).strip()
+    else:
+        # フォールバック：SUBJECT/PREVIEW/BODY ラベル行を除外して全文使用
+        cleaned = [
+            ln for ln in lines
+            if not any(kw in ln.upper()
+                       for kw in ["SUBJECT LINE", "PREVIEW TEXT", "**BODY"])
+        ]
+        body = "\n".join(cleaned).strip()
+
+    # ── フォールバック値 ─────────────────────────────────────────
     if not subject:
         subject = f"Japan Finance Weekly — {data['week_label']}"
     if not preview:
-        preview = f"Nikkei {data['equities']['nikkei'].get('latest','')}" \
-                  f" | USD/JPY {data['equities']['usdjpy'].get('latest','')}"
-    body = "\n".join(body_lines).strip() if body_lines else full_text
+        nk = data.get("equities", {}).get("nikkei", {}).get("latest", "")
+        fx = data.get("equities", {}).get("usdjpy", {}).get("latest", "")
+        preview = f"Nikkei {nk} | USD/JPY {fx}"
 
     result = {
         "subject":      subject,
@@ -158,7 +216,6 @@ def generate_newsletter(data: dict) -> dict:
         "model":        MODEL_ID,
     }
 
-    # 保存
     os.makedirs("data", exist_ok=True)
     path = "data/newsletter_draft.json"
     with open(path, "w", encoding="utf-8") as f:
@@ -177,4 +234,4 @@ if __name__ == "__main__":
     print("\n── Draft Preview ──")
     print(f"Subject : {result['subject']}")
     print(f"Preview : {result['preview_text']}")
-    print(f"Body    : {result['body'][:300]}...")
+    print(f"\nBody (first 200 chars):\n{result['body'][:200]}")

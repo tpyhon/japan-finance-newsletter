@@ -1,5 +1,5 @@
 {
-  "collected_at": "2026-05-03T22:24:48.895418",
+  "collected_at": "2026-05-03T23:51:14.497218",
   "week_label": "2026-W18",
   "equities": {
     "nikkei": {
@@ -22,10 +22,40 @@
       "weekly_change": -2.74,
       "weekly_change_pct": -1.47
     },
+    "gbpjpy": {
+      "latest": 213.21,
+      "weekly_change": -2.43,
+      "weekly_change_pct": -1.13
+    },
     "ej_etf": {
       "latest": 88.3,
       "weekly_change": 0.62,
       "weekly_change_pct": 0.71
+    },
+    "crude_wti": {
+      "latest": 101.94,
+      "weekly_change": 2.01,
+      "weekly_change_pct": 2.01
+    },
+    "crude_brent": {
+      "latest": 108.17,
+      "weekly_change": -3.09,
+      "weekly_change_pct": -2.78
+    },
+    "gold": {
+      "latest": 4644.5,
+      "weekly_change": 53.0,
+      "weekly_change_pct": 1.15
+    },
+    "shanghai": {
+      "latest": 4112.16,
+      "weekly_change": 32.26,
+      "weekly_change_pct": 0.79
+    },
+    "kospi": {
+      "latest": 6598.87,
+      "weekly_change": 123.24,
+      "weekly_change_pct": 1.9
     }
   },
   "boj": {
@@ -53,6 +83,11 @@
       "title": "Japan foreign minister urges Iran to show flexibility in standoff with U.S.",
       "summary": "Japan's foreign minister urged Iran to show &quot;flexibility&quot; during phone talks with his counterpart on Saturday, his ministry said, with the standoff between the United States and Iran…",
       "source": "Japan Today"
+    },
+    {
+      "title": "US Is Oil Supplier of Last Resort as Hormuz Disruptions Worsen",
+      "summary": "The tankers have been arriving from all over the world in unprecedented numbers. After loading up in Alaska and along the US Gulf Coast, they head back out to sea &mdash; to Japan, Thailand and even as far as Australia.",
+      "source": "Bloomberg Markets"
     }
   ]
 }

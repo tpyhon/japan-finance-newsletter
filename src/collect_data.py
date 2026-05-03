@@ -17,37 +17,45 @@ load_dotenv()
 # ──────────────────────────────────────────
 # 1. 株価・為替データ（Yahoo Finance）
 # ──────────────────────────────────────────
-def collect_equities() -> dict:
-    """日経225・TOPIX・USD/JPY・EUR/JPY・EWJ ETFを取得"""
+def collect_equities():
     tickers = {
-        "nikkei": "^N225",
-        "topix":  "1306.T",   # TOPIX連動ETF（東証上場）
-        "usdjpy": "JPY=X",
-        "eurjpy": "EURJPY=X",
-        "ej_etf": "EWJ",      # iShares MSCI Japan ETF
+        # Japanese equities
+        "nikkei":       "^N225",
+        "topix":        "1306.T",
+        # FX
+        "usdjpy":       "JPY=X",
+        "eurjpy":       "EURJPY=X",
+        "gbpjpy":       "GBPJPY=X",
+        # ETF
+        "ej_etf":       "EWJ",
+        # Commodities
+        "crude_wti":    "CL=F",
+        "crude_brent":  "BZ=F",
+        "gold":         "GC=F",
+        # Asian markets
+        "shanghai":     "000001.SS",
+        "kospi":        "^KS11",
     }
 
     results = {}
-    for name, symbol in tickers.items():
+    for name, sym in tickers.items():
         try:
-            ticker = yf.Ticker(symbol)
-            hist   = ticker.history(period="5d")
-            if hist.empty:
+            t = yf.Ticker(sym)
+            h = t.history(period="5d")
+            if h.empty:
                 results[name] = {"error": "no data"}
                 continue
-            latest    = float(hist["Close"].iloc[-1])
-            prev      = float(hist["Close"].iloc[0])
-            change    = round(latest - prev, 2)
-            change_pct = round((latest - prev) / prev * 100, 2)
+            latest = float(h["Close"].iloc[-1])
+            prev   = float(h["Close"].iloc[0])
             results[name] = {
-                "latest":            round(latest, 2),
-                "weekly_change":     change,
-                "weekly_change_pct": change_pct,
+                "latest":             round(latest, 2),
+                "weekly_change":      round(latest - prev, 2),
+                "weekly_change_pct":  round((latest - prev) / prev * 100, 2),
             }
         except Exception as e:
             results[name] = {"error": str(e)}
-
     return results
+
 
 
 # ──────────────────────────────────────────
