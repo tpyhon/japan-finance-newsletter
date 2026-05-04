@@ -102,7 +102,35 @@ class NoteClient:
         })
 
     # ── ログイン ─────────────────────────────────
+    # NoteClient の login() と load_cookies() を修正
+
     def login(self, email: str, password: str) -> None:
+        """
+        環境変数にCookieが設定されている場合はそれを優先使用。
+        ない場合はメール/パスワードでログイン。
+        """
+        # ★ GitHub Actions用：Secretから直接Cookieを注入
+        session_cookie = os.environ.get("NOTE_SESSION_COOKIE", "")
+        if session_cookie:
+            log.info("🍪 環境変数からセッションCookieを注入...")
+            self.session.cookies.set(
+                "_note_session_v5",
+                session_cookie,
+                domain="note.com",
+            )
+            # セッション有効性を確認
+            resp = self.session.get(
+                "https://note.com/api/v2/users/current",
+                timeout=10,
+            )
+            log.info(f"セッション確認: {resp.status_code} {resp.text[:100]}")
+            if resp.status_code == 200:
+                log.info("✅ Cookie認証成功")
+                return
+            else:
+                log.warning("⚠️ Cookie無効、メール/パスワードでログインします")
+
+        # 通常のメール/パスワードログイン
         log.info("🔑 noteにAPIログイン中...")
         resp = self.session.post(
             f"{BASE_URL}/api/v1/sessions/sign_in",
@@ -115,13 +143,14 @@ class NoteClient:
         if resp.status_code not in (200, 201):
             raise RuntimeError(f"ログイン失敗: {resp.status_code} {resp.text[:200]}")
 
-        # セッションCookieを保存
+        # 新しいCookieを保存
         cookie_dict = dict(self.session.cookies)
         OUTPUT_DIR.mkdir(exist_ok=True)
         with open(OUTPUT_DIR / "note_cookies.json", "w", encoding="utf-8") as f:
             json.dump(cookie_dict, f, ensure_ascii=False, indent=2)
 
         log.info("✅ ログイン成功")
+
 
     # ── 既存Cookieでセッション復元 ───────────────
     def load_cookies(self) -> bool:
@@ -311,6 +340,15 @@ def main():
             f"エラー: {e}",
         )
         raise
+    # ★ ローカル実行時：新しいCookieをSecretに登録するよう通知
+    if not os.environ.get("NOTE_SESSION_COOKIE"):
+        new_cookie = client.session.cookies.get("_note_session_v5", "")
+        if new_cookie:
+            log.info(f"\n{'='*50}")
+            log.info("📋 GitHub Secretsを以下の値で更新してください:")
+            log.info(f"   Secret名: NOTE_SESSION_COOKIE")
+            log.info(f"   値: {new_cookie}")
+            log.info(f"{'='*50}\n")
 
 
 if __name__ == "__main__":
