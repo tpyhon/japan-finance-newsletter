@@ -1,9 +1,9 @@
+# .github/workflows/newsletter.yml
 name: Japan Finance Newsletter
 
 on:
   schedule:
-    # 毎週日曜日 23:00 JST (14:00 UTC)
-    - cron: '0 14 * * 0'
+    - cron: '0 14 * * 0'  # 毎週日曜 23:00 JST
   workflow_dispatch:
 
 jobs:
@@ -29,10 +29,10 @@ jobs:
       - name: Collect overseas intel
         env:
           ALPHA_VANTAGE_KEY: ${{ secrets.ALPHA_VANTAGE_KEY }}
-          FINNHUB_KEY: ${{ secrets.FINNHUB_KEY }}
+          FINNHUB_KEY:       ${{ secrets.FINNHUB_KEY }}
         run: python src/collect_overseas_intel.py
 
-      # ── 英語版ニュースレター生成 ─────────────────
+      # ── 英語ニュースレター生成 ───────────────────
       - name: Generate English newsletter
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -44,13 +44,10 @@ jobs:
       - name: Generate X post text
         run: python src/post_to_x.py
 
-      # ── 日本語版note記事生成 ─────────────────────
-      - name: Generate Japanese note article
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python src/generate_note_jp.py
+      # ── Note関連は note_daily.yml に移管 ────────
+      # (削除済み: Generate Japanese note article)
 
-      # ── 成果物をArtifactsに保存 ──────────────────
+      # ── 成果物保存 ──────────────────────────────
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -59,9 +56,7 @@ jobs:
             data/weekly_data.json
             data/overseas_intel.json
             data/newsletter_draft.json
-            data/note_draft.json
             data/post_ready.html
             data/post_summary.txt
             data/x_post.txt
-            data/note_post.txt
           retention-days: 7
