@@ -22,4 +22,4 @@ Cookieの期限切れ対策が唯一の定期メンテナンス項目です。_n
 
 Copy# Cookieを再取得してSecretの更新値を表示
 python src/post_to_note.py
-# ログに「NOTE_SESSION_COOKIEを更新してください: xxxxx」と表示される
+ログに「NOTE_SESSION_COOKIEを更新してください: xxxxx」と表示される
