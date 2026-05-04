@@ -20,6 +20,6 @@ Cookie認証 → 下書き作成 → 本文保存 → 公開
 ⚠️ 今後の運用で注意すること
 Cookieの期限切れ対策が唯一の定期メンテナンス項目です。_note_session_v5 は数週間〜数ヶ月で失効するので、Actions が失敗したらローカルで以下を実行してSecretを更新してください。
 
-Copy# Cookieを再取得してSecretの更新値を表示
+Cookieを再取得してSecretの更新値を表示
 python src/post_to_note.py
 ログに「NOTE_SESSION_COOKIEを更新してください: xxxxx」と表示される
