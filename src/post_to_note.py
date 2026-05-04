@@ -142,14 +142,29 @@ class NoteClient:
             f"{BASE_URL}/api/v1/text_notes",
             json={"template_key": None},
         )
+
+        # ★ レスポンス全体をログに出す
+        log.info(f"create_draft response: {resp.status_code} {resp.text[:300]}")
+
         if resp.status_code not in (200, 201):
             raise RuntimeError(f"下書き作成失敗: {resp.status_code} {resp.text[:200]}")
 
-        data = resp.json()["data"]
+        body = resp.json()
+
+        # ★ "data"キーがない場合のフォールバック
+        if "data" in body:
+            data = body["data"]
+        elif "id" in body:
+            # レスポンスがそのままdataの場合
+            data = body
+        else:
+            raise RuntimeError(f"予期しないレスポンス形式: {body}")
+
         note_id  = data["id"]
         note_key = data["key"]
         log.info(f"✅ 下書き作成完了: id={note_id}, key={note_key}")
         return data
+
 
     # ── 本文・タイトルを保存 ──────────────────────
     def save_draft(
