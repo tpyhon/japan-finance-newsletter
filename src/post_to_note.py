@@ -93,6 +93,7 @@ def notify_slack(webhook_url: str, message: str) -> None:
 class NoteClient:
     def __init__(self):
         self.session = requests.Session()
+        self._prefetched_draft = None
         self.session.headers.update({
             "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Referer":         "https://note.com/",
@@ -105,30 +106,35 @@ class NoteClient:
     # NoteClient の login() と load_cookies() を修正
 
     def login(self, email: str, password: str) -> None:
-        """
-        環境変数にCookieが設定されている場合はそれを優先使用。
-        ない場合はメール/パスワードでログイン。
-        """
+
         # ★ GitHub Actions用：Secretから直接Cookieを注入
         session_cookie = os.environ.get("NOTE_SESSION_COOKIE", "")
         if session_cookie:
             log.info("🍪 環境変数からセッションCookieを注入...")
+            # 重複を避けるため先にクリア
+            self.session.cookies.clear()
             self.session.cookies.set(
                 "_note_session_v5",
                 session_cookie,
-                domain="note.com",
+                domain=".note.com",  # ★ ドットあり
             )
-            # セッション有効性を確認
-            resp = self.session.get(
-                "https://note.com/api/v2/users/current",
+            # ★ セッション確認：text_notes新規作成で確認（404が出ないエンドポイント）
+            resp = self.session.post(
+                f"{BASE_URL}/api/v1/text_notes",
+                json={"template_key": None},
                 timeout=10,
             )
-            log.info(f"セッション確認: {resp.status_code} {resp.text[:100]}")
-            if resp.status_code == 200:
-                log.info("✅ Cookie認証成功")
+            log.info(f"セッション確認: {resp.status_code} {resp.text[:150]}")
+            if resp.status_code in (200, 201):
+                # 作成に成功したら下書きIDを保持しておく
+                body = resp.json()
+                data = body.get("data", body)
+                self._prefetched_draft = data  # ★ create_draft()で使い回す
+                log.info(f"✅ Cookie認証成功・下書き作成済み: id={data.get('id')}")
                 return
             else:
                 log.warning("⚠️ Cookie無効、メール/パスワードでログインします")
+                self.session.cookies.clear()
 
         # 通常のメール/パスワードログイン
         log.info("🔑 noteにAPIログイン中...")
@@ -143,13 +149,14 @@ class NoteClient:
         if resp.status_code not in (200, 201):
             raise RuntimeError(f"ログイン失敗: {resp.status_code} {resp.text[:200]}")
 
-        # 新しいCookieを保存
-        cookie_dict = dict(self.session.cookies)
+        # ★ Cookie重複を避けて保存
+        cookie_dict = {k: v for k, v in self.session.cookies.items()}
         OUTPUT_DIR.mkdir(exist_ok=True)
         with open(OUTPUT_DIR / "note_cookies.json", "w", encoding="utf-8") as f:
             json.dump(cookie_dict, f, ensure_ascii=False, indent=2)
 
         log.info("✅ ログイン成功")
+        self._prefetched_draft = None
 
 
     # ── 既存Cookieでセッション復元 ───────────────
@@ -165,33 +172,33 @@ class NoteClient:
         return True
 
     # ── 新規下書き記事を作成（空で作成してIDを取得）──
+    # ★ create_draft() も修正（login()で作成済みの場合はスキップ）
+
     def create_draft(self) -> dict:
+        # login()でCookie認証時にすでに作成済みの場合はそれを返す
+        if getattr(self, "_prefetched_draft", None):
+            log.info(f"♻️ 既存下書きを使用: id={self._prefetched_draft.get('id')}")
+            draft = self._prefetched_draft
+            self._prefetched_draft = None
+            return draft
+
         log.info("📄 下書き記事を新規作成...")
         resp = self.session.post(
             f"{BASE_URL}/api/v1/text_notes",
             json={"template_key": None},
         )
-
-        # ★ レスポンス全体をログに出す
         log.info(f"create_draft response: {resp.status_code} {resp.text[:300]}")
 
         if resp.status_code not in (200, 201):
             raise RuntimeError(f"下書き作成失敗: {resp.status_code} {resp.text[:200]}")
 
         body = resp.json()
+        data = body.get("data", body)
 
-        # ★ "data"キーがない場合のフォールバック
-        if "data" in body:
-            data = body["data"]
-        elif "id" in body:
-            # レスポンスがそのままdataの場合
-            data = body
-        else:
+        if "id" not in data:
             raise RuntimeError(f"予期しないレスポンス形式: {body}")
 
-        note_id  = data["id"]
-        note_key = data["key"]
-        log.info(f"✅ 下書き作成完了: id={note_id}, key={note_key}")
+        log.info(f"✅ 下書き作成完了: id={data['id']}, key={data['key']}")
         return data
 
 
