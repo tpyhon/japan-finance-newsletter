@@ -214,56 +214,73 @@ SYSTEM_PROMPTS = {
 # ─── プロンプトビルダー ────────────────────────────
 
 def build_note_prompt(market_data: dict, intel: dict, mode: str) -> str:
-    """モードに応じたユーザープロンプトを生成する"""
-    now      = datetime.now(JST)
+    now       = datetime.now(JST)
     day_label = now.strftime("%Y年%m月%d日（%a）")
 
-    # ── 共通：トップストーリー ──
-    top = intel.get("top_story", {})
+    # ── モードに応じてトップ記事を切り替え ──────────────
+    if mode in ("exam", "light"):
+        top = intel.get("top_story_exam") or intel.get("top_story", {})
+    else:
+        top = intel.get("top_story", {})
+
+    # top_story は {source, title, summary, ...} の平坦構造
+    # 旧形式 {"source":..., "item":{...}} にも対応
+    if "item" in top:
+        top = top["item"]
+
     top_block = ""
     if top:
         top_block = f"""
 【今日のフォーカス記事】
-- 情報源: {top.get('source', '不明')}
-- タイトル: {top.get('title', '')}
-- 要約: {str(top.get('summary', top.get('description', '')))[:300]}
+- 情報源 : {top.get('source',   '不明')}
+- カテゴリ: {top.get('category', '－')}
+- タイトル: {top.get('title',    '')}
+- 要約   : {str(top.get('summary', top.get('description', '')))[:300]}
 - センチメント: {top.get('sentiment_label', '')} ({top.get('sentiment_score', '')})
 """
 
-    # ── 共通：市場データ ──
+    # ── 国内ニュースブロック（exam / light のみ） ────────
+    domestic_block = ""
+    if mode in ("exam", "light"):
+        domestic = intel.get("domestic_news", [])[:5]
+        if domestic:
+            lines = "\n".join(
+                f"- [{i.get('category','')}] {i.get('title','')} "
+                f"（{i.get('source','')}）"
+                for i in domestic
+            )
+            domestic_block = f"\n【国内ニュース（直近3日）】\n{lines}\n"
+
+    # ── 市場データ（以降は既存コードそのまま） ───────────
     mkt = market_data.get("market_summary", {})
     market_block = f"""
 【市場データ（{day_label}時点）】
-| 指標 | 値 | 前日比 |
-|------|-----|--------|
-| 日経平均 | {_safe(mkt.get('nikkei','N/A'), '.2f')} | {_chg(mkt.get('nikkei_change', 0))} |
-| USD/JPY  | {_safe(mkt.get('usdjpy','N/A'), '.2f')} | {_chg(mkt.get('usdjpy_change', 0))} |
-| 金        | {_safe(mkt.get('gold','N/A'), '.2f')}  | {_chg(mkt.get('gold_change', 0))} |
-| 原油      | {_safe(mkt.get('crude','N/A'), '.2f')} | {_chg(mkt.get('crude_change', 0))} |
+| 指標     | 値                                    | 前日比                          |
+|----------|---------------------------------------|---------------------------------|
+| 日経平均 | {_safe(mkt.get('nikkei',  'N/A'), '.2f')} | {_chg(mkt.get('nikkei_change', 0))} |
+| USD/JPY  | {_safe(mkt.get('usdjpy',  'N/A'), '.2f')} | {_chg(mkt.get('usdjpy_change', 0))} |
+| 金        | {_safe(mkt.get('gold',    'N/A'), '.2f')} | {_chg(mkt.get('gold_change',   0))} |
+| 原油      | {_safe(mkt.get('crude',   'N/A'), '.2f')} | {_chg(mkt.get('crude_change',  0))} |
 """
 
-    # ── FRBニュース（最新3件） ──
     fed_items = intel.get("fed_news", [])[:3]
     fed_block = "\n".join(
-        f"- [{i['title']}]({i.get('link','')})" for i in fed_items
+        f"- [{i['title']}]({i.get('link', '')})" for i in fed_items
     ) if fed_items else "- （データなし）"
 
-    # ── AlphaVantage ニュース（上位3件） ──
     av_items = intel.get("alpha_vantage", [])[:3]
     av_block = "\n".join(
-        f"- {i.get('title','')} [センチメント:{i.get('sentiment_label','')}]"
+        f"- {i.get('title', '')} [センチメント:{i.get('sentiment_label', '')}]"
         for i in av_items
     ) if av_items else "- （データなし）"
 
-    # ── 決算カレンダー ──
     earnings = intel.get("earnings_calendar", [])[:5]
     earn_block = "\n".join(
-        f"- {e.get('symbol','')} | {e.get('reportDate','')} | "
-        f"予想EPS: {e.get('epsEstimate','N/A')} | 予想売上: {e.get('revenueEstimate','N/A')}"
+        f"- {e.get('symbol', '')} | {e.get('date', '')} | "
+        f"予想EPS: {e.get('eps_estimate', 'N/A')} | 予想売上: {e.get('revenue_est', 'N/A')}"
         for e in earnings
     ) if earnings else "- （データなし）"
 
-    # ── モード別追加指示 ──
     mode_instruction = {
         "investor": (
             "海外投資・日本人投資家の観点を中心に記事を構成してください。"
@@ -271,20 +288,21 @@ def build_note_prompt(market_data: dict, intel: dict, mode: str) -> str:
         ),
         "exam": (
             "中学受験・高校受験・大学受験の時事問題の観点から記事を構成してください。"
+            "【国内ニュース】がある場合は、そちらを優先してフォーカス記事として扱ってください。"
             "関連する受験科目（社会・公民・地理・歴史・現代社会など）を明示し、"
             "入試で問われやすいキーワードを太字で示してください。"
             "小学生〜高校生が読める、やさしい言葉を使ってください。"
         ),
         "light": (
             "経済に詳しくない一般読者（子育て世代・主婦・学生）向けに、"
+            "【国内ニュース】がある場合は、身近な話題として優先的に取り上げてください。"
             "日常生活との接点（食費・旅行・住宅ローン等）を必ず盛り込んでください。"
             "アナロジー（例え話）を必ず1つ使い、「難しくない」と感じさせてください。"
         ),
     }.get(mode, "")
 
     return f"""今日の日付（JST）: {day_label}
-{top_block}
-{market_block}
+{top_block}{domestic_block}{market_block}
 【FRB・中央銀行ニュース】
 {fed_block}
 
@@ -297,7 +315,7 @@ def build_note_prompt(market_data: dict, intel: dict, mode: str) -> str:
 ---
 {mode_instruction}
 
-上記データをもとに、**■ TITLE** から始まるnote記事を1本生成してください。
+上記データをもとに、**■ TITLE_A** から始まるnote記事を1本生成してください。
 フォーマット:
 ■ TITLE: （タイトル）
 ■ SUBTITLE: （サブタイトル）

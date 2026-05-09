@@ -276,6 +276,201 @@ def pick_top_story(intel: dict) -> dict:
 
     return {}
 
+# ── 7. 国内ニュース収集（exam / light モード向け） ────────────
+DOMESTIC_SOURCES = [
+    {
+        "name":     "NHK NEWS Web（主要ニュース）",
+        "url":      "https://www.nhk.or.jp/rss/news/cat0.xml",
+        "category": "総合",
+    },
+    {
+        "name":     "NHK NEWS Web（社会）",
+        "url":      "https://www.nhk.or.jp/rss/news/cat3.xml",
+        "category": "社会",
+    },
+    {
+        "name":     "NHK NEWS Web（政治）",
+        "url":      "https://www.nhk.or.jp/rss/news/cat4.xml",
+        "category": "政治",
+    },
+    {
+        "name":     "NHK NEWS Web（経済）",
+        "url":      "https://www.nhk.or.jp/rss/news/cat5.xml",
+        "category": "経済",
+    },
+    {
+        "name":     "首相官邸（官邸ニュース）",
+        "url":      "https://www.kantei.go.jp/jp/headline/rss.xml",
+        "category": "政治",
+    },
+    {
+        "name":     "文部科学省（報道発表）",
+        "url":      "https://www.mext.go.jp/b_menu/houdou/rss/rss.xml",
+        "category": "教育",
+    },
+    {
+        "name":     "環境省（報道発表）",
+        "url":      "https://www.env.go.jp/press/rss.xml",
+        "category": "環境",
+    },
+]
+
+# 受験頻出ジャンルキーワード
+EXAM_KEYWORDS = [
+    # 政治・公民
+    "内閣", "首相", "国会", "法律", "選挙", "憲法", "条約", "外交",
+    "地方自治", "予算", "税", "政党", "参議院", "衆議院",
+    # 経済・金融
+    "経済", "物価", "賃金", "雇用", "GDP", "景気", "貿易", "関税",
+    "円", "株", "インフレ", "デフレ", "日銀", "金利",
+    # 社会・環境
+    "少子化", "人口", "高齢", "SDGs", "温暖化", "気候", "環境",
+    "エネルギー", "再生可能", "原発", "脱炭素",
+    # 国際
+    "国連", "G7", "G20", "NATO", "ASEAN", "アメリカ", "中国",
+    "ロシア", "ウクライナ", "北朝鮮", "核", "難民",
+    # 科学・技術
+    "AI", "人工知能", "宇宙", "ロケット", "JAXA", "ノーベル",
+    "iPS", "再生医療", "半導体",
+    # 教育
+    "入試", "大学", "学習指導要領", "奨学金", "教育",
+]
+
+
+def collect_domestic_news() -> list:
+    """国内ニュースを NHK・官邸・文科省・環境省 RSS から収集する"""
+    cutoff  = datetime.now(timezone.utc) - timedelta(days=3)   # 3日以内
+    results = []
+
+    for src in DOMESTIC_SOURCES:
+        try:
+            feed  = feedparser.parse(src["url"])
+            count = 0
+            for entry in feed.entries:
+                if count >= 3:
+                    break
+
+                title   = entry.get("title",   "")
+                summary = entry.get("summary", "") or entry.get("description", "")
+                combined = title + " " + summary
+
+                # 受験関連キーワードフィルター
+                if not any(kw in combined for kw in EXAM_KEYWORDS):
+                    continue
+
+                # 3日以内フィルター
+                pub_str = (
+                    entry.get("published", "")
+                    or entry.get("updated",   "")
+                )
+                if pub_str:
+                    try:
+                        parsed = email.utils.parsedate_to_datetime(pub_str)
+                        if parsed.tzinfo is None:
+                            parsed = parsed.replace(tzinfo=timezone.utc)
+                        if parsed < cutoff:
+                            continue
+                    except Exception:
+                        pass
+
+                results.append({
+                    "source":   src["name"],
+                    "category": src["category"],
+                    "title":    title,
+                    "summary":  summary[:300],
+                    "link":     entry.get("link", ""),
+                    "date":     pub_str,
+                })
+                count += 1
+
+        except Exception as e:
+            print(f"⚠️ Domestic RSS error ({src['name']}): {e}")
+
+    print(f"   Domestic news : {len(results)} items")
+    return results
+
+
+def pick_top_story_exam(intel: dict) -> dict:
+    """
+    exam / light モード向けのトップ記事選定
+    国内ニュースを優先し、受験頻出テーマに関連するものを選ぶ
+
+    優先順位:
+      1. 文科省・教育直結ニュース
+      2. NHK政治（内閣・国会・選挙）
+      3. NHK経済（物価・賃金・貿易）
+      4. NHK社会（少子化・環境・SDGs）
+      5. 海外ニュース（Alpha Vantage から受験関連）
+      6. 海外 Premium RSS から受験関連
+    """
+    domestic = intel.get("domestic_news", [])
+
+    # 優先度の高いカテゴリ・キーワード順に評価
+    priority_rules = [
+        # (カテゴリ, キーワードリスト, スコア)
+        ("教育",   ["入試", "大学", "教育", "学習", "奨学"],         100),
+        ("政治",   ["内閣", "首相", "国会", "選挙", "憲法", "条約"],  90),
+        ("経済",   ["物価", "賃金", "GDP", "貿易", "関税", "日銀"],   80),
+        ("社会",   ["少子化", "人口", "SDGs", "温暖化", "環境"],       70),
+        ("総合",   EXAM_KEYWORDS,                                       60),
+    ]
+
+    best_item  = None
+    best_score = -1
+
+    for item in domestic:
+        cat     = item.get("category", "")
+        title   = item.get("title",    "")
+        summary = item.get("summary",  "")
+        combined = title + " " + summary
+
+        for rule_cat, keywords, base_score in priority_rules:
+            if cat != rule_cat and rule_cat != "総合":
+                continue
+            matched = sum(1 for kw in keywords if kw in combined)
+            score   = base_score + matched * 5
+            if score > best_score:
+                best_score = score
+                best_item  = {
+                    "source":          item["source"],
+                    "category":        cat,
+                    "title":           title,
+                    "summary":         item.get("summary", ""),
+                    "link":            item.get("link",    ""),
+                    "sentiment_label": "Neutral",
+                    "sentiment_score": 0,
+                }
+
+    if best_item:
+        return best_item
+
+    # フォールバック：海外ニュースから受験関連を探す
+    for item in intel.get("alpha_vantage", []):
+        title = item.get("title", "")
+        if any(kw in title for kw in ["Japan", "Tariff", "Trade", "AI", "Climate"]):
+            return {
+                "source":          item.get("source", ""),
+                "title":           title,
+                "summary":         item.get("summary", ""),
+                "link":            item.get("link",    ""),
+                "sentiment_label": item.get("sentiment",       "Neutral"),
+                "sentiment_score": item.get("sentiment_score", 0),
+            }
+
+    # 最終フォールバック：domestic の先頭
+    if domestic:
+        d = domestic[0]
+        return {
+            "source":          d["source"],
+            "title":           d["title"],
+            "summary":         d.get("summary", ""),
+            "link":            d.get("link",    ""),
+            "sentiment_label": "Neutral",
+            "sentiment_score": 0,
+        }
+
+    return {}
+
 
 # ── メイン ───────────────────────────────────────────────────
 def collect_all_intel() -> dict:
@@ -291,21 +486,25 @@ def collect_all_intel() -> dict:
     reddit   = collect_reddit_trends()
     print("📅  Collecting earnings calendar...")
     earnings = collect_earnings_calendar()
+    print("🗾  Collecting domestic news (NHK / 官邸 / 文科省 / 環境省)...")
+    domestic = collect_domestic_news()          # ← 追加
 
     data = {
         "collected_at":      datetime.now().isoformat(),
         "week_label":        datetime.now().strftime("%Y-W%V"),
-        "day_label":         datetime.now().strftime("%Y-%m-%d"),  # ★追加
+        "day_label":         datetime.now().strftime("%Y-%m-%d"),
         "fed_news":          fed,
         "sec_filings":       sec,
         "alpha_vantage":     av,
         "premium_rss":       rss,
         "reddit_trends":     reddit,
         "earnings_calendar": earnings,
+        "domestic_news":     domestic,          # ← 追加
     }
 
-    # ★ トップ記事を選定して格納
-    data["top_story"] = pick_top_story(data)
+    # モード別トップ記事選定
+    data["top_story"]      = pick_top_story(data)        # investor向け（既存）
+    data["top_story_exam"] = pick_top_story_exam(data)   # exam/light向け（新規）
 
     os.makedirs("data", exist_ok=True)
     path = "data/overseas_intel.json"
@@ -319,10 +518,14 @@ def collect_all_intel() -> dict:
     print(f"   Premium RSS   : {len(rss)} items")
     print(f"   Reddit trends : {len(reddit)} items")
     print(f"   Earnings cal  : {len(earnings)} items")
-    print(f"   Top story     : {data['top_story'].get('item',{}).get('title','なし')}")
+    print(f"   Domestic news : {len(domestic)} items")    # ← 追加
+    top_exam = data["top_story_exam"]
+    print(f"   Top story (investor): {data['top_story'].get('item', {}).get('title', 'なし')[:50]}")
+    print(f"   Top story (exam)    : {top_exam.get('title', 'なし')[:50]}")   # ← 追加
 
     return data
 
 
 if __name__ == "__main__":
     collect_all_intel()
+
