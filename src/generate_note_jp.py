@@ -479,25 +479,45 @@ if __name__ == "__main__":
     parser.add_argument(
         "--mode",
         choices=["investor", "exam", "light"],
-        default="investor",
-        help="記事モード (investor/exam/light)",
+        default=None,   # None のとき曜日で自動決定
+        help="記事モード (investor/exam/light)。省略時は曜日で自動決定",
     )
     args = parser.parse_args()
 
     from dotenv import load_dotenv
     load_dotenv()
 
+    # ── 曜日でモード自動決定 ──────────────────────────────
+    # 月(0)・木(3)・日(6) → investor
+    # 火(1)・金(4)        → exam
+    # 水(2)・土(5)        → light
+    if args.mode is None:
+        dow = datetime.now(JST).weekday()   # 0=月 〜 6=日
+        mode = {
+            0: "investor",
+            1: "exam",
+            2: "light",
+            3: "investor",
+            4: "exam",
+            5: "light",
+            6: "investor",
+        }[dow]
+        print(f"📅 曜日自動判定: {['月','火','水','木','金','土','日'][dow]}曜日 → mode={mode}")
+    else:
+        mode = args.mode
+
     weekly_path = DATA_DIR / "weekly_data.json"
     intel_path  = DATA_DIR / "overseas_intel.json"
 
     if not weekly_path.exists():
-        print("⚠️  data/weekly_data.json が見つかりません。collect_data.py を先に実行してください。")
+        print("⚠️  data/weekly_data.json が見つかりません。")
         exit(1)
     if not intel_path.exists():
-        print("⚠️  data/overseas_intel.json が見つかりません。collect_overseas_intel.py を先に実行してください。")
+        print("⚠️  data/overseas_intel.json が見つかりません。")
         exit(1)
 
     market_data = _load_json(weekly_path)
     intel       = _load_json(intel_path)
 
-    generate_note_article(market_data, intel, mode=args.mode)
+    generate_note_article(market_data, intel, mode=mode)
+
